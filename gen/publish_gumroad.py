@@ -97,13 +97,15 @@ def upload_file(token, path):
             body = f.read(100 * 1024 * 1024)
             r = requests.put(part["presigned_url"], data=body, timeout=300)
             r.raise_for_status()
-            etags.append({"part_number": part["part_number"],
-                          "etag": r.headers["ETag"].strip('"')})
+            # S3 返回的 ETag 带引号，complete 端点要求原样回传
+            etags.append((part["part_number"], r.headers["ETag"]))
 
-    done = call("POST", f"{API}/files/complete",
-                data={"access_token": token, "upload_id": upload_id, "key": key,
-                      **{f"parts[{i}][part_number]": e["part_number"] for i, e in enumerate(etags)},
-                      **{f"parts[{i}][etag]": e["etag"] for i, e in enumerate(etags)}})
+    # 文档格式: parts[][part_number]=1, parts[][etag]="abc"（同名字段重复，用 tuple 列表）
+    form = [("access_token", token), ("upload_id", upload_id), ("key", key)]
+    for pn, etag in etags:
+        form.append(("parts[][part_number]", str(pn)))
+        form.append(("parts[][etag]", etag))
+    done = call("POST", f"{API}/files/complete", data=form)
     file_url = done.get("file_url") or pre.get("file_url")
     print(f"  ✓ 上传 {filename} → {file_url[:80]}…")
     return file_url
@@ -122,18 +124,18 @@ def main():
     file_urls = [upload_file(token, z) for z in ZIPS]
 
     print("2/3 创建产品…")
-    payload = {
-        "access_token": token,
-        "native_type": "digital",
-        "name": NAME,
-        "price": PRICE_CENTS,
-        "price_currency_type": "usd",
-        "description": DESCRIPTION,
-        "custom_summary": "5 ink-friendly printable planner templates (daily/weekly/habits/budget/focus), A4 + US Letter, instant download.",
-        "custom_permalink": "minimalist-planner-bundle",
-        **{f"tags[{i}]": t for i, t in enumerate(TAGS)},
-        **{f"files[{i}][url]": u for i, u in enumerate(file_urls)},
-    }
+    payload = [
+        ("access_token", token),
+        ("native_type", "digital"),
+        ("name", NAME),
+        ("price", str(PRICE_CENTS)),
+        ("price_currency_type", "usd"),
+        ("description", DESCRIPTION),
+        ("custom_summary", "5 ink-friendly printable planner templates (daily/weekly/habits/budget/focus), A4 + US Letter, instant download."),
+        ("custom_permalink", "minimalist-planner-bundle"),
+    ]
+    payload += [("tags[]", t) for t in TAGS]
+    payload += [("files[][url]", u) for u in file_urls]
     if args.draft:
         payload["draft"] = "true"
     product = call("POST", f"{API}/products", data=payload)["product"]

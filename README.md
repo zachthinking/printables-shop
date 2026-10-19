@@ -12,7 +12,8 @@ AI 自动化赚钱试错项目 #1：可打印规划表（printables）数字产�
 - [x] Gumroad 一键上架脚本 `gen/publish_gumroad.py`（上传 zip → 创建产品 → 挂封面 → 发布）
 - [x] 主图公网 URL（Gumroad 封面用）：`https://raw.githubusercontent.com/zachthinking/printables-shop/main/listings/mockup-main.png`
 - [x] 项目备份：GitHub `zachthinking/printables-shop`（公开）
-- [ ] **上架（唯一待办，需 Zach 约 10 分钟）**：注册 Gumroad → 确认邮箱 → 绑 PayPal → Settings → Advanced 创建 OAuth application → 生成 token（勾 `edit_products` + `view_sales`）→ 把 token 发给 Claude
+- [x] **Gumroad 已上架发布（2026-10-20）**：https://zachmindset.gumroad.com/l/minimalist-planner-bundle （$4.99，2 个 zip + 封面 + 9 tags，产品 ID `J7NT17Dn4E2H3jY1TCZQ9A==`）
+- [ ] 引流（上架 ≠ 有流量，下一个战场）：Pinterest pin 图、闲鱼、Twitter/X
 - [ ] 每个产品的单独预览图（Etsy 附图，可从 make_mockup.py 扩展）
 
 ## 产品线
