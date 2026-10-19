@@ -3,32 +3,52 @@
 # requires-python = ">=3.10"
 # dependencies = ["pymupdf>=1.24", "pillow>=10.0"]
 # ///
-"""生成 Etsy/Gumroad 主图：把 5 个产品首页渲染后拼成一张浅色场景图。
+"""生成 Etsy/Gumroad 主图：把 bundle 内产品首页渲染后拼成一张浅色场景图。
 
+用法: uv run gen/make_mockup.py --bundle minimalist|meal
 要点：sheet 用 RGBA + 透明填充旋转，阴影从 alpha 通道生成，避免黑边。
 """
+import argparse
 import os
 import pymupdf
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 DIST = os.path.join(os.path.dirname(__file__), "..", "dist")
-OUT = os.path.join(os.path.dirname(__file__), "..", "listings", "mockup-main.png")
 
-NAMES = ["daily-planner", "weekly-planner", "habit-tracker", "monthly-budget", "focus-session"]
-BG = (247, 244, 238)  # 米白
+BUNDLES = {
+    "minimalist": {
+        "names": ["daily-planner", "weekly-planner", "habit-tracker", "monthly-budget", "focus-session"],
+        "title": "MINIMALIST PLANNER BUNDLE",
+        "sub": "5 Printable Templates  ·  A4 + US Letter  ·  Instant Download",
+        "bg": (247, 244, 238),
+        "out": "mockup-main.png",
+    },
+    "meal": {
+        "names": ["weekly-meal-planner", "grocery-list", "recipe-card", "fridge-pantry-inventory"],
+        "title": "MEAL PLANNER BUNDLE",
+        "sub": "4 Printable Templates  ·  A4 + US Letter  ·  Instant Download",
+        "bg": (238, 243, 236),
+        "out": "mockup-meal.png",
+    },
+}
 
 W, H = 2400, 1800
 
 # (中心x比例, 中心y比例, 旋转角度, 高度占画布比例)
-# 扇形排开，全部位于标题文字下方
-LAYOUT = [
-    (0.145, 0.60, -8, 0.54),
-    (0.315, 0.62, -4, 0.58),
-    (0.50, 0.64, 0, 0.63),
-    (0.685, 0.62, 4, 0.58),
-    (0.855, 0.60, 8, 0.54),
-]
-ORDER = [0, 4, 1, 3, 2]  # 两边先贴，中间最后压顶
+# 扇形排开，全部位于标题文字下方；按张数选布局
+LAYOUTS = {
+    5: ([(0.145, 0.60, -8, 0.54),
+         (0.315, 0.62, -4, 0.58),
+         (0.50, 0.64, 0, 0.63),
+         (0.685, 0.62, 4, 0.58),
+         (0.855, 0.60, 8, 0.54)],
+        [0, 4, 1, 3, 2]),
+    4: ([(0.17, 0.60, -7, 0.56),
+         (0.39, 0.62, -2, 0.61),
+         (0.61, 0.62, 2, 0.61),
+         (0.83, 0.60, 7, 0.56)],
+        [0, 3, 1, 2]),
+}
 
 
 def render_pdf(name):
@@ -61,11 +81,18 @@ def paste_with_shadow(canvas_img, sheet, cx, cy, angle, target_h):
 
 
 def main():
-    img = Image.new("RGBA", (W, H), BG + (255,))
-    sheets = [render_pdf(n) for n in NAMES]
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--bundle", choices=sorted(BUNDLES), default="minimalist")
+    args = ap.parse_args()
+    cfg = BUNDLES[args.bundle]
+    out = os.path.join(os.path.dirname(__file__), "..", "listings", cfg["out"])
+    layout, order = LAYOUTS[len(cfg["names"])]
 
-    for i in ORDER:
-        fx, fy, ang, fh = LAYOUT[i]
+    img = Image.new("RGBA", (W, H), cfg["bg"] + (255,))
+    sheets = [render_pdf(n) for n in cfg["names"]]
+
+    for i in order:
+        fx, fy, ang, fh = layout[i]
         paste_with_shadow(img, sheets[i], W * fx, H * fy, ang, int(H * fh))
 
     draw = ImageDraw.Draw(img)
@@ -75,16 +102,14 @@ def main():
     except OSError:
         font_big = ImageFont.load_default()
         font_small = font_big
-    title = "MINIMALIST PLANNER BUNDLE"
-    sub = "5 Printable Templates  ·  A4 + US Letter  ·  Instant Download"
-    tw = draw.textlength(title, font=font_big)
-    draw.text(((W - tw) / 2, 110), title, fill=(40, 40, 40), font=font_big)
-    sw = draw.textlength(sub, font=font_small)
-    draw.text(((W - sw) / 2, 230), sub, fill=(120, 115, 105), font=font_small)
+    tw = draw.textlength(cfg["title"], font=font_big)
+    draw.text(((W - tw) / 2, 110), cfg["title"], fill=(40, 40, 40), font=font_big)
+    sw = draw.textlength(cfg["sub"], font=font_small)
+    draw.text(((W - sw) / 2, 230), cfg["sub"], fill=(120, 115, 105), font=font_small)
 
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    img.convert("RGB").save(OUT, quality=92)
-    print(f"✓ {OUT}")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    img.convert("RGB").save(out, quality=92)
+    print(f"✓ {out}")
 
 
 if __name__ == "__main__":

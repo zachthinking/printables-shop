@@ -9,7 +9,7 @@
     export GUMROAD_ACCESS_TOKEN=xxx
     # 境外 API + S3，大陆网络需代理：
     export https_proxy=http://172.16.97.12:1081
-    uv run gen/publish_gumroad.py --cover-url https://<公网URL>/mockup-main.png
+    uv run gen/publish_gumroad.py --bundle meal --cover-url https://<公网URL>/mockup-meal.png
 
 token 获取: Gumroad → Settings → Advanced → Create OAuth application →
 Generate access token（勾 edit_products + view_sales）。
@@ -24,27 +24,9 @@ API = "https://api.gumroad.com/v2"
 HERE = os.path.dirname(__file__)
 LISTINGS = os.path.join(HERE, "..", "listings")
 
-NAME = "Minimalist Planner Bundle (5 Printable Templates, A4 + US Letter)"
-PRICE_CENTS = 499
-TAGS = ["printable planner", "planner bundle", "minimalist planner",
-        "daily planner", "weekly planner", "habit tracker",
-        "budget planner", "productivity", "instant download"]
-
-DESCRIPTION = """
-<p>Get organized with this clean, ink-friendly <strong>Minimalist Planner Bundle</strong> —
-5 printable templates covering your day, week, month, habits, and budget.</p>
-
-<p><strong>✦ What's included ✦</strong></p>
-<ul>
-<li><strong>Daily Planner</strong> — schedule (6:00–22:00), top 3 priorities, to-do list, water tracker, notes</li>
-<li><strong>Weekly Planner</strong> — 7-day overview with notes section</li>
-<li><strong>Habit Tracker</strong> — 14 habits × 31 days grid</li>
-<li><strong>Monthly Budget</strong> — income, savings &amp; debt, fixed/variable expenses, monthly summary</li>
-<li><strong>Focus Session</strong> — pomodoro-style task tracker with distraction parking lot</li>
-</ul>
-
+_COMMON_TAIL = """
 <p><strong>✦ Sizes ✦</strong><br>
-Every template comes in BOTH A4 and US Letter (2 zip files, 10 PDFs total).
+Every template comes in BOTH A4 and US Letter.
 Undated — print as many copies as you need, forever.</p>
 
 <p><strong>✦ How it works ✦</strong></p>
@@ -61,10 +43,53 @@ Undated — print as many copies as you need, forever.</p>
 </ul>
 """
 
-ZIPS = [
-    os.path.join(LISTINGS, "minimalist-planner-bundle-A4.zip"),
-    os.path.join(LISTINGS, "minimalist-planner-bundle-Letter.zip"),
-]
+BUNDLES = {
+    "minimalist": {
+        "name": "Minimalist Planner Bundle (5 Printable Templates, A4 + US Letter)",
+        "permalink": "minimalist-planner-bundle",
+        "price_cents": 499,
+        "tags": ["printable planner", "planner bundle", "minimalist planner",
+                 "daily planner", "weekly planner", "habit tracker",
+                 "budget planner", "productivity", "instant download"],
+        "summary": "5 ink-friendly printable planner templates (daily/weekly/habits/budget/focus), A4 + US Letter, instant download.",
+        "description": """
+<p>Get organized with this clean, ink-friendly <strong>Minimalist Planner Bundle</strong> —
+5 printable templates covering your day, week, month, habits, and budget.</p>
+
+<p><strong>✦ What's included ✦</strong></p>
+<ul>
+<li><strong>Daily Planner</strong> — schedule (6:00–22:00), top 3 priorities, to-do list, water tracker, notes</li>
+<li><strong>Weekly Planner</strong> — 7-day overview with notes section</li>
+<li><strong>Habit Tracker</strong> — 14 habits × 31 days grid</li>
+<li><strong>Monthly Budget</strong> — income, savings &amp; debt, fixed/variable expenses, monthly summary</li>
+<li><strong>Focus Session</strong> — pomodoro-style task tracker with distraction parking lot</li>
+</ul>
+""" + _COMMON_TAIL,
+        "zips": ["minimalist-planner-bundle-A4.zip", "minimalist-planner-bundle-Letter.zip"],
+    },
+    "meal": {
+        "name": "Meal Planner Bundle (4 Printable Templates, A4 + US Letter)",
+        "permalink": "meal-planner-bundle",
+        "price_cents": 399,
+        "tags": ["meal planner", "printable planner", "weekly meal planner",
+                 "grocery list", "recipe card", "pantry inventory",
+                 "meal planning", "kitchen planner", "instant download"],
+        "summary": "4 ink-friendly printable kitchen templates (meal plan/grocery/recipe/inventory), A4 + US Letter, instant download.",
+        "description": """
+<p>Plan meals, shop smarter, and waste less food with this clean, ink-friendly
+<strong>Meal Planner Bundle</strong> — 4 printable kitchen organization templates.</p>
+
+<p><strong>✦ What's included ✦</strong></p>
+<ul>
+<li><strong>Weekly Meal Planner</strong> — 7-day breakfast/lunch/dinner grid with prep notes</li>
+<li><strong>Grocery List</strong> — organized by store section (produce, dairy, meat, pantry, frozen, household)</li>
+<li><strong>Recipe Card</strong> — ingredients, numbered steps, prep/cook time, servings, rating</li>
+<li><strong>Fridge &amp; Pantry Inventory</strong> — track what you have with quantities and expiry dates</li>
+</ul>
+""" + _COMMON_TAIL,
+        "zips": ["meal-planner-bundle-A4.zip", "meal-planner-bundle-Letter.zip"],
+    },
+}
 
 
 def die(msg):
@@ -113,28 +138,31 @@ def upload_file(token, path):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--bundle", choices=sorted(BUNDLES), default="minimalist")
     ap.add_argument("--cover-url", help="主图的公网 URL（covers 端点只接受公开 URL）")
     ap.add_argument("--draft", action="store_true", help="创建为草稿而不是直接发布")
     args = ap.parse_args()
+    cfg = BUNDLES[args.bundle]
 
     token = os.environ.get("GUMROAD_ACCESS_TOKEN") or die(
         "缺少 GUMROAD_ACCESS_TOKEN 环境变量（见脚本顶部注释）")
 
     print("1/3 上传产品文件…")
-    file_urls = [upload_file(token, z) for z in ZIPS]
+    zips = [os.path.join(LISTINGS, z) for z in cfg["zips"]]
+    file_urls = [upload_file(token, z) for z in zips]
 
     print("2/3 创建产品…")
     payload = [
         ("access_token", token),
         ("native_type", "digital"),
-        ("name", NAME),
-        ("price", str(PRICE_CENTS)),
+        ("name", cfg["name"]),
+        ("price", str(cfg["price_cents"])),
         ("price_currency_type", "usd"),
-        ("description", DESCRIPTION),
-        ("custom_summary", "5 ink-friendly printable planner templates (daily/weekly/habits/budget/focus), A4 + US Letter, instant download."),
-        ("custom_permalink", "minimalist-planner-bundle"),
+        ("description", cfg["description"]),
+        ("custom_summary", cfg["summary"]),
+        ("custom_permalink", cfg["permalink"]),
     ]
-    payload += [("tags[]", t) for t in TAGS]
+    payload += [("tags[]", t) for t in cfg["tags"]]
     payload += [("files[][url]", u) for u in file_urls]
     if args.draft:
         payload["draft"] = "true"
